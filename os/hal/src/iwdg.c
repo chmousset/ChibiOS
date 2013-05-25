@@ -82,7 +82,8 @@ void iwdgFeed(IWDGDriver *driver) {
  * @api
  */
 void iwdgStart(IWDGDriver *driver, const IWDGConfig *config) {
-  iwdg_lld_start(driver, config);
+  driver->config = config;
+  iwdg_lld_start(driver);
 }
 
 /**

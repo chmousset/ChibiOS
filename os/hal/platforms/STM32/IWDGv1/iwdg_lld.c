@@ -85,40 +85,39 @@ void iwdg_lld_init(void) {
  *
  * @notapi
  */
-void iwdg_lld_start(IWDGDriver *driver, IWDGConfig *config) {
-  driver->config = config;
+void iwdg_lld_start(IWDGDriver *driver) {
 #if STM32_IWDG_USE_IWDG1
   if (&IWDGD1 == driver) {
     driver->wdg->KR = 0x5555;
 
-    if(config->timeout < 442)
+    if(driver->config->timeout < 442)
     {
   	  driver->wdg->PR = IWDG_PR_PR & 0;
-	  driver->wdg->RLR = config->timeout / IWDG_NTICK * IWDG_FCY / 4;
-    }else if (config->timeout < 885)
+	  driver->wdg->RLR = driver->config->timeout / IWDG_NTICK * IWDG_FCY / 4;
+    }else if (driver->config->timeout < 885)
 	{
   	  driver->wdg->PR = IWDG_PR_PR & 1;
-	  driver->wdg->RLR = config->timeout / IWDG_NTICK * IWDG_FCY / 8;
-	}else if (config->timeout < 1771)
+	  driver->wdg->RLR = driver->config->timeout / IWDG_NTICK * IWDG_FCY / 8;
+	}else if (driver->config->timeout < 1771)
 	{
   	  driver->wdg->PR = IWDG_PR_PR & 2;
-	  driver->wdg->RLR = config->timeout / IWDG_NTICK * IWDG_FCY / 16;
-	}else if (config->timeout < 3542)
+	  driver->wdg->RLR = driver->config->timeout / IWDG_NTICK * IWDG_FCY / 16;
+	}else if (driver->config->timeout < 3542)
 	{
   	  driver->wdg->PR = IWDG_PR_PR & 3;
-	  driver->wdg->RLR = config->timeout / IWDG_NTICK * IWDG_FCY / 32;
-	}else if (config->timeout < 7084)
+	  driver->wdg->RLR = driver->config->timeout / IWDG_NTICK * IWDG_FCY / 32;
+	}else if (driver->config->timeout < 7084)
 	{
   	  driver->wdg->PR = IWDG_PR_PR & 4;
-	  driver->wdg->RLR = config->timeout / IWDG_NTICK * IWDG_FCY / 64;
-	}else if (config->timeout < 14169)
+	  driver->wdg->RLR = driver->config->timeout / IWDG_NTICK * IWDG_FCY / 64;
+	}else if (driver->config->timeout < 14169)
 	{
   	  driver->wdg->PR = IWDG_PR_PR & 5;
-	  driver->wdg->RLR = config->timeout / IWDG_NTICK * IWDG_FCY / 128;
-	}else if (config->timeout < 28339)
+	  driver->wdg->RLR = driver->config->timeout / IWDG_NTICK * IWDG_FCY / 128;
+	}else if (driver->config->timeout < 28339)
 	{
   	  driver->wdg->PR = IWDG_PR_PR & 6;
-	  driver->wdg->RLR = config->timeout / IWDG_NTICK * IWDG_FCY / 256;
+	  driver->wdg->RLR = driver->config->timeout / IWDG_NTICK * IWDG_FCY / 256;
 	}
 	else return;
 

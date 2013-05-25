@@ -128,7 +128,7 @@ extern IWDGDriver IWDGD1;
 extern "C" {
 #endif
   void iwdg_lld_init(void);
-  void iwdg_lld_start(IWDGDriver *driver, IWDGConfig *config);
+  void iwdg_lld_start(IWDGDriver *driver);
   void iwdg_lld_stop(IWDGDriver *driver);
   void iwdg_lld_feed(IWDGDriver *driver);
 #ifdef __cplusplus
