@@ -131,6 +131,15 @@ extern "C" {
                                 i2caddr_t addr,
                                 uint8_t *rxbuf, size_t rxbytes,
                                 systime_t timeout);
+#if I2C_USE_SLAVE_MODE
+msg_t i2cSlaveIoTimeout( I2CDriver * i2cp,
+						 i2caddr_t addr,
+						 uint8_t * rxbuf, size_t rxbytes,
+						 uint8_t * txbuf, size_t txbytes,
+						 TI2cSlaveCb rxcb,
+						 TI2cSlaveCb txcb,
+						 systime_t timeout );
+#endif
 #if I2C_USE_MUTUAL_EXCLUSION
   void i2cAcquireBus(I2CDriver *i2cp);
   void i2cReleaseBus(I2CDriver *i2cp);
