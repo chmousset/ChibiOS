@@ -61,6 +61,8 @@ extern "C" {
   void iwdgInit(void);
   void iwdgStart(IWDGDriver *driver, const IWDGConfig *config);
   void iwdgStop(IWDGDriver *driver);
+  void iwdgFeed(IWDGDriver *driver);
+  void IWDGObjectInit(IWDGDriver *driver);
 #ifdef __cplusplus
 }
 #endif
