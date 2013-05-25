@@ -27,7 +27,6 @@
 
 #include "ch.h"
 #include "hal.h"
-#include "iwdg_lld.h"
 #if HAL_USE_IWDG || defined(__DOXYGEN__)
 
 /*===========================================================================*/
