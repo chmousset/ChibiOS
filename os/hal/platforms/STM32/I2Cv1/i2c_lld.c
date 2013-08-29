@@ -291,43 +291,92 @@ static void i2c_lld_serve_event_interrupt(I2CDriver *i2cp) {
   I2C_TypeDef *dp = i2cp->i2c;
   uint32_t regSR2 = dp->SR2;
   uint32_t event = dp->SR1;
-
-  /* Interrupts are disabled just before dmaStreamEnable() because there
-     is no need of interrupts until next transaction begin. All the work is
-     done by the DMA.*/
-  switch (I2C_EV_MASK & (event | (regSR2 << 16))) {
-  case I2C_EV5_MASTER_MODE_SELECT:
-    dp->DR = i2cp->addr;
-    break;
-  case I2C_EV6_MASTER_REC_MODE_SELECTED:
-    dp->CR2 &= ~I2C_CR2_ITEVTEN;
-    dmaStreamEnable(i2cp->dmarx);
-    dp->CR2 |= I2C_CR2_LAST;                 /* Needed in receiver mode. */
-    if (dmaStreamGetTransactionSize(i2cp->dmarx) < 2)
-      dp->CR1 &= ~I2C_CR1_ACK;
-    break;
-  case I2C_EV6_MASTER_TRA_MODE_SELECTED:
-    dp->CR2 &= ~I2C_CR2_ITEVTEN;
-    dmaStreamEnable(i2cp->dmatx);
-    break;
-  case I2C_EV8_2_MASTER_BYTE_TRANSMITTED:
-    /* Catches BTF event after the end of transmission.*/
-    if (dmaStreamGetTransactionSize(i2cp->dmarx) > 0) {
-      /* Starts "read after write" operation, LSB = 1 -> receive.*/
-      i2cp->addr |= 0x01;
-      dp->CR1 |= I2C_CR1_START | I2C_CR1_ACK;
-      return;
-    }
-    dp->CR2 &= ~I2C_CR2_ITEVTEN;
-    dp->CR1 |= I2C_CR1_STOP;
-    wakeup_isr(i2cp, RDY_OK);
-    break;
-  default:
-    break;
+#if I2C_USE_SLAVE_MODE
+  if ( !i2cp->slave_mode )
+  {
+#endif //I2C_USE_SLAVE_MODE
+	  /* Interrupts are disabled just before dmaStreamEnable() because there
+	   i s no need of interrupt*s until next transaction begin. All the work is
+	   done by the DMA.*/
+	  switch (I2C_EV_MASK & (event | (regSR2 << 16))) {
+		  case I2C_EV5_MASTER_MODE_SELECT:
+			  dp->DR = i2cp->addr;
+			  break;
+		  case I2C_EV6_MASTER_REC_MODE_SELECTED:
+			  dp->CR2 &= ~I2C_CR2_ITEVTEN;
+			  dmaStreamEnable(i2cp->dmarx);
+			  dp->CR2 |= I2C_CR2_LAST;                 /* Needed in receiver mode. */
+			  if (dmaStreamGetTransactionSize(i2cp->dmarx) < 2)
+				  dp->CR1 &= ~I2C_CR1_ACK;
+			  break;
+		  case I2C_EV6_MASTER_TRA_MODE_SELECTED:
+			  dp->CR2 &= ~I2C_CR2_ITEVTEN;
+			  dmaStreamEnable(i2cp->dmatx);
+			  break;
+		  case I2C_EV8_2_MASTER_BYTE_TRANSMITTED:
+			  /* Catches BTF event after the end of transmission.*/
+			  if (dmaStreamGetTransactionSize(i2cp->dmarx) > 0) {
+				  /* Starts "read after write" operation, LSB = 1 -> receive.*/
+				  i2cp->addr |= 0x01;
+				  dp->CR1 |= I2C_CR1_START | I2C_CR1_ACK;
+				  return;
+			  }
+			  dp->CR2 &= ~I2C_CR2_ITEVTEN;
+			  dp->CR1 |= I2C_CR1_STOP;
+			  wakeup_isr(i2cp, RDY_OK);
+			  break;
+		  default:
+			  break;
+	  }
+	  /* Clear ADDR flag. */
+	  if (event & (I2C_SR1_ADDR | I2C_SR1_ADD10))
+		  (void)dp->SR2;
+#if I2C_USE_SLAVE_MODE
   }
-  /* Clear ADDR flag. */
-  if (event & (I2C_SR1_ADDR | I2C_SR1_ADD10))
-    (void)dp->SR2;
+  else
+  {
+	  if  (event & (I2C_SR1_ADDR | I2C_SR1_ADD10))
+	  {
+		  // When transaction begins reset byte counters.
+		  i2cp->rxind = 0;
+		  i2cp->txind = 0;
+		  
+		  // Clear Addr Flag
+		  event = dp->SR1;
+		  regSR2 = dp->SR2;
+	  }
+	  if ( event & I2C_SR1_TXE )
+	  {
+		  dp->DR = i2cp->txbuf[ i2cp->txind++ ];
+		  if ( i2cp->rxind >= i2cp->txbytes )
+			  i2cp->txind = 0;
+	  }
+	  if ( event & I2C_SR1_RXNE )
+	  {
+		  i2cp->rxbuf[ i2cp->rxind++ ] = dp->DR;
+		  if ( i2cp->rxind >= i2cp->rxbytes )
+			  i2cp->rxind = 0;
+	  }
+	  if ( event & I2C_SR1_STOPF )
+	  {
+		  // Clear STOPF bit by writing to CR1.
+		  event = dp->SR1;
+		  dp->CR1 |= I2C_CR1_PE;
+		  
+		  // Notify user about receive finish.
+		  if ( i2cp->rxcb )
+			  i2cp->rxcb( i2cp );
+	  }
+	  if ( event & I2C_SR1_AF )
+	  {
+		  dp->SR1 &= ~I2C_SR1_AF;
+		  
+		  // Notify user about transfer finish.
+		  if ( i2cp->txcb )
+			  i2cp->txcb( i2cp );
+	  }
+  }
+#endif // I2C_USE_SLAVE_MODE
 }
 
 /**
@@ -393,6 +442,8 @@ static void i2c_lld_serve_tx_end_irq(I2CDriver *i2cp, uint32_t flags) {
  * @notapi
  */
 static void i2c_lld_serve_error_interrupt(I2CDriver *i2cp, uint16_t sr) {
+	  I2C_TypeDef *dp = i2cp->i2c;
+	  i2cflags_t errors;
 
   /* Clears interrupt flags just to be safe.*/
   dmaStreamDisable(i2cp->dmatx);
@@ -404,13 +455,30 @@ static void i2c_lld_serve_error_interrupt(I2CDriver *i2cp, uint16_t sr) {
     i2cp->errors |= I2CD_BUS_ERROR;
 
   if (sr & I2C_SR1_ARLO)                            /* Arbitration lost.    */
-    i2cp->errors |= I2CD_ARBITRATION_LOST;
-
-  if (sr & I2C_SR1_AF) {                            /* Acknowledge fail.    */
-    i2cp->i2c->CR2 &= ~I2C_CR2_ITEVTEN;
-    i2cp->i2c->CR1 |= I2C_CR1_STOP;                 /* Setting stop bit.    */
-    i2cp->errors |= I2CD_ACK_FAILURE;
+	  i2cp->errors |= I2CD_ARBITRATION_LOST;
+  #if I2C_USE_SLAVE_MODE
+  if ( !i2cp->slave_mode )
+  {
+	  #endif
+	  if (dp->SR1 & I2C_SR1_AF) {                       /* Acknowledge fail.    */
+		  dp->SR1 &= ~I2C_SR1_AF;
+		  dp->CR2 &= ~I2C_CR2_ITEVTEN;
+		  dp->CR1 |= I2C_CR1_STOP;                        /* Setting stop bit.    */
+		  errors |= I2CD_ACK_FAILURE;
+	  }
+	  #if I2C_USE_SLAVE_MODE
   }
+  else
+  {
+	  // In slave mode it is not an error it is end of slave transfer.
+	  // Just clear AF flag.
+	  dp->SR1 &= ~I2C_SR1_AF;
+	  
+	  // Notify user about transfer finish.
+	  if ( i2cp->txcb )
+		  i2cp->txcb( i2cp );
+  }
+  #endif
 
   if (sr & I2C_SR1_OVR)                             /* Overrun.             */
     i2cp->errors |= I2CD_OVERRUN;
@@ -795,6 +863,10 @@ msg_t i2c_lld_master_receive_timeout(I2CDriver *i2cp, i2caddr_t addr,
      happen outside the critical zone.*/
   if ((timeout != TIME_INFINITE) && !chVTIsArmedI(&vt))
     return RDY_TIMEOUT;
+  
+  #if I2C_USE_SLAVE_MODE
+  i2cp->slave_mode = 0;
+  #endif
 
   /* Starts the operation.*/
   dp->CR2 |= I2C_CR2_ITEVTEN;
@@ -883,7 +955,11 @@ msg_t i2c_lld_master_transmit_timeout(I2CDriver *i2cp, i2caddr_t addr,
      happen outside the critical zone.*/
   if ((timeout != TIME_INFINITE) && !chVTIsArmedI(&vt))
     return RDY_TIMEOUT;
-
+  
+  #if I2C_USE_SLAVE_MODE
+  i2cp->slave_mode = 0;
+  #endif
+  
   /* Starts the operation.*/
   dp->CR2 |= I2C_CR2_ITEVTEN;
   dp->CR1 |= I2C_CR1_START;
@@ -896,6 +972,84 @@ msg_t i2c_lld_master_transmit_timeout(I2CDriver *i2cp, i2caddr_t addr,
 
   return chThdSelf()->p_u.rdymsg;
 }
+
+
+#if I2C_USE_SLAVE_MODE
+
+msg_t i2c_lld_slave_io_timeout( I2CDriver *i2cp, i2caddr_t addr,
+								uint8_t * rxbuf, size_t rxbytes,
+								uint8_t * txbuf, size_t txbytes,
+								TI2cSlaveCb rxcb,
+								TI2cSlaveCb txcb,
+								systime_t timeout )
+{
+	I2C_TypeDef *dp = i2cp->i2c;
+	VirtualTimer vt;
+	
+	// Global timeout for the whole operation.
+	i2cp->thread = chThdSelf();
+	if (timeout != TIME_INFINITE)
+		chVTSetI(&vt, timeout, i2c_lld_safety_timeout, (void *)i2cp);
+	
+	// Waits until BUSY flag is reset and the STOP from the previous operation
+	// is completed, alternatively for a timeout condition.
+	chSysUnlock();
+	while ( (dp->SR2 & I2C_SR2_BUSY) || ( dp->CR1 & I2C_CR1_STOP ) )
+	{
+		chSysLock();
+		if ((timeout != TIME_INFINITE) && !chVTIsArmedI(&vt))
+			return RDY_TIMEOUT;
+		chSysUnlock();
+	}
+	
+	// This lock will be released in high level driver.
+	chSysLock();
+	
+	// Atomic check on the timer in order to make sure that a timeout didn't
+	// happen outside the critical zone.
+	if ((timeout != TIME_INFINITE) && !chVTIsArmedI(&vt))
+		return RDY_TIMEOUT;
+	
+	// Initializes driver fields, LSB = 1 -> read.
+	i2cp->addr    = (addr << 1);
+	i2cp->errors  = 0;
+	
+	i2cp->rxbuf   = rxbuf;
+	i2cp->rxbytes = rxbytes;
+	i2cp->rxind = 0;
+	i2cp->rxcb  = rxcb;
+	
+	i2cp->txbuf   = txbuf;
+	i2cp->txbytes = txbytes;
+	i2cp->txind = 0;
+	i2cp->txcb  = txcb;
+	
+	i2cp->slave_mode = 1;
+	// Starts the operation.
+	// No start - slave mode.
+	dp->CR1 &= ~( I2C_CR1_START );
+	// Turn off ISR and DMA.
+	dp->CR2 &= ~( I2C_CR2_DMAEN );
+	// Own address.
+	dp->OAR1 = ((addr << 1) & (0xFE));
+	// Turn interrupts and buffer interrupts on.
+	dp->CR2 |= (I2C_CR2_ITEVTEN | I2C_CR2_ITBUFEN);
+	// Generate Ack on address match and IOs.
+	dp->CR1 |= I2C_CR1_ACK;
+	
+	/* Waits for the operation completion or a timeout.*/
+	i2cp->thread = chThdSelf();
+	//chSchGoSleepS( THD_STATE_SUSPENDED );
+	if ( ( timeout != TIME_INFINITE ) && chVTIsArmedI( &vt ) )
+		chVTResetI( &vt );
+	
+	//return chThdSelf()->p_u.rdymsg;
+	return RDY_OK;
+}
+
+
+#endif // I2C_USE_SLAVE_MODE
+
 
 #endif /* HAL_USE_I2C */
 

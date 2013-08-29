@@ -60,6 +60,7 @@
 #include "uart.h"
 #include "usb.h"
 #include "qei.h"
+#include "iwdg.h"
 
 /* Complex drivers.*/
 #include "mmc_spi.h"
