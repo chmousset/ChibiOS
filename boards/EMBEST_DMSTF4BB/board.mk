@@ -1,5 +1,5 @@
 # List of all the board related files.
-BOARDSRC = ${CHIBIOS}/boards/ST_STM32F4_DM_STF4BB/board.c
+BOARDSRC = ${CHIBIOS}/boards/EMBEST_DMSTF4BB/board.c
 
 # Required include directories
-BOARDINC = ${CHIBIOS}/boards/ST_STM32F4_DM_STF4BB
+BOARDINC = ${CHIBIOS}/boards/EMBEST_DMSTF4BB
