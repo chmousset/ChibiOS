@@ -38,6 +38,7 @@
 extern "C" {
 #endif
   void chvprintf(BaseSequentialStream *chp, const char *fmt, va_list ap);
+  int chsnprintf(char *str, size_t size, const char *fmt, ...);
 #ifdef __cplusplus
 }
 #endif
@@ -65,7 +66,7 @@ extern "C" {
  *
  * @api
  */
-static inline void chprintf(BaseSequentialStream *chp, const char *fmt, ...) {
+static INLINE void chprintf(BaseSequentialStream *chp, const char *fmt, ...) {
   va_list ap;
 
   va_start(ap, fmt);

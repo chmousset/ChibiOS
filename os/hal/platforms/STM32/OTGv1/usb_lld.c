@@ -246,7 +246,7 @@ static uint8_t *otg_do_push(volatile uint32_t *fifop, uint8_t *buf, size_t n) {
   while (n > 0) {
     /* Note, this line relies on the Cortex-M3/M4 ability to perform
        unaligned word accesses and on the LSB-first memory organization.*/
-    *fifop = *((uint32_t *)buf);
+    *fifop = *((PACKED_VAR uint32_t *)buf);
     buf += 4;
     n--;
   }
@@ -345,7 +345,7 @@ static uint8_t *otg_do_pop(volatile uint32_t *fifop, uint8_t *buf, size_t n) {
     uint32_t w = *fifop;
     /* Note, this line relies on the Cortex-M3/M4 ability to perform
        unaligned word accesses and on the LSB-first memory organization.*/
-    *((uint32_t *)buf) = w;
+    *((PACKED_VAR uint32_t *)buf) = w;
     buf += 4;
     n--;
   }
@@ -374,7 +374,7 @@ static void otg_fifo_read_to_buffer(volatile uint32_t *fifop,
     if (max) {
       /* Note, this line relies on the Cortex-M3/M4 ability to perform
          unaligned word accesses and on the LSB-first memory organization.*/
-      *((uint32_t *)buf) = w;
+      *((PACKED_VAR uint32_t *)buf) = w;
       buf += 4;
       max--;
     }
@@ -549,7 +549,7 @@ static void otg_epin_handler(USBDriver *usbp, usbep_t ep) {
   stm32_otg_t *otgp = usbp->otg;
   uint32_t epint = otgp->ie[ep].DIEPINT;
 
-  otgp->ie[ep].DIEPINT = 0xFFFFFFFF;
+  otgp->ie[ep].DIEPINT = epint;
 
   if (epint & DIEPINT_TOC) {
     /* Timeouts not handled yet, not sure how to handle.*/
@@ -582,7 +582,7 @@ static void otg_epout_handler(USBDriver *usbp, usbep_t ep) {
   uint32_t epint = otgp->oe[ep].DOEPINT;
 
   /* Resets all EP IRQ sources.*/
-  otgp->oe[ep].DOEPINT = 0xFFFFFFFF;
+  otgp->oe[ep].DOEPINT = epint;
 
   if ((epint & DOEPINT_STUP) && (otgp->DOEPMSK & DOEPMSK_STUPM)) {
     /* Setup packets handling, setup packets are handled using a
@@ -861,6 +861,10 @@ void usb_lld_start(USBDriver *usbp) {
       rccEnableOTG_HS(FALSE);
       rccResetOTG_HS();
 
+      /* Workaround for the problem described here:
+         http://forum.chibios.org/phpbb/viewtopic.php?f=16&t=1798 */
+      rccDisableOTG_HSULPI(TRUE);
+
       /* Enables IRQ vector.*/
       nvicEnableVector(STM32_OTG2_NUMBER,
                        CORTEX_PRIORITY_MASK(STM32_USB_OTG2_IRQ_PRIORITY));
@@ -889,7 +893,12 @@ void usb_lld_start(USBDriver *usbp) {
     otgp->PCGCCTL = 0;
 
     /* Internal FS PHY activation.*/
+#if defined(BOARD_OTG_NOVBUSSENS)
+    otgp->GCCFG = GCCFG_NOVBUSSENS | GCCFG_VBUSASEN | GCCFG_VBUSBSEN |
+                  GCCFG_PWRDWN;
+#else
     otgp->GCCFG = GCCFG_VBUSASEN | GCCFG_VBUSBSEN | GCCFG_PWRDWN;
+#endif
 
     /* Soft core reset.*/
     otg_core_reset(usbp);

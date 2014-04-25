@@ -29,6 +29,7 @@
 
 #include "ch.h"
 #include "chprintf.h"
+#include "memstreams.h"
 
 #define MAX_FILLER 11
 #define FLOAT_PRECISION 100000
@@ -76,10 +77,10 @@ static char *ftoa(char *p, double num) {
   long l;
   unsigned long precision = FLOAT_PRECISION;
 
-  l = num;
+  l = (long)num;
   p = long_to_string_with_divisor(p, l, 10, 0);
   *p++ = '.';
-  l = (num - l) * precision;
+  l = (long)((num - l) * precision);
   return long_to_string_with_divisor(p, l, 10, precision / 10);
 }
 #endif
@@ -245,9 +246,9 @@ unsigned_common:
         chSequentialStreamPut(chp, (uint8_t)*s++);
         i--;
       }
-      do
+      do {
         chSequentialStreamPut(chp, (uint8_t)filler);
-      while (++width != 0);
+      } while (++width != 0);
     }
     while (--i >= 0)
       chSequentialStreamPut(chp, (uint8_t)*s++);
@@ -257,6 +258,50 @@ unsigned_common:
       width--;
     }
   }
+}
+
+/**
+ * @brief   System formatted output function.
+ * @details This function implements a minimal @p vprintf()-like functionality
+ *          with output on a @p BaseSequentialStream.
+ *          The general parameters format is: %[-][width|*][.precision|*][l|L]p.
+ *          The following parameter types (p) are supported:
+ *          - <b>x</b> hexadecimal integer.
+ *          - <b>X</b> hexadecimal long.
+ *          - <b>o</b> octal integer.
+ *          - <b>O</b> octal long.
+ *          - <b>d</b> decimal signed integer.
+ *          - <b>D</b> decimal signed long.
+ *          - <b>u</b> decimal unsigned integer.
+ *          - <b>U</b> decimal unsigned long.
+ *          - <b>c</b> character.
+ *          - <b>s</b> string.
+ *          .
+ *
+ * @param[in] str       pointer to a buffer
+ * @param[in] size      maximum size of the buffer
+ * @param[in] fmt       formatting string
+ * @return              The size of the generated string.
+ *
+ * @api
+ */
+int chsnprintf(char *str, size_t size, const char *fmt, ...) {
+  va_list ap;
+  MemoryStream ms;
+  BaseSequentialStream *chp;
+
+  /* Memory stream object to be used as a string writer.*/
+  msObjectInit(&ms, (uint8_t *)str, size, 0);
+
+  /* Performing the print operation using the common code.*/
+  chp = (BaseSequentialStream *)&ms;
+  va_start(ap, fmt);
+  chvprintf(chp, fmt, ap);
+  va_end(ap);
+
+  /* Final zero and size return.*/
+  chSequentialStreamPut(chp, 0);
+  return ms.eos - 1;
 }
 
 /** @} */
