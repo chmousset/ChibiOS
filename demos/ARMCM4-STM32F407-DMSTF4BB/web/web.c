@@ -26,6 +26,8 @@
  * @{
  */
 
+#include "stdlib.h"
+#include "string.h"
 #include "ch.h"
 
 #include "lwip/opt.h"
